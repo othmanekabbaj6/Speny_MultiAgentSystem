@@ -1,0 +1,33 @@
+# Core
+python-dotenv>=1.0.0
+pydantic>=2.5.0
+pydantic-settings>=2.2.0
+
+# LangChain (versions compatibles entre elles)
+langchain>=0.3.0
+langchain-community>=0.3.0
+langchain-core>=0.3.0
+langchain-groq>=1.1.0
+
+# LlamaIndex
+llama-index>=0.10.40
+llama-index-vector-stores-chroma>=0.1.6
+
+# Vector Store
+chromadb>=0.4.24
+
+# Firebase
+firebase-admin>=6.4.0
+
+# ML / Data
+pandas>=2.2.0
+numpy>=1.26.0
+scikit-learn>=1.4.0
+prophet>=1.1.5
+
+# API
+fastapi>=0.111.0
+uvicorn>=0.29.0
+
+# Groq
+groq>=0.30.0
