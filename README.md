@@ -1,651 +1,649 @@
-# Speny — Système Multi-Agents IA de Gestion Financière
+# Speny — AI Multi-Agent Personal Finance Management System
 
-> Projet de contrôle continu — IA Distribuée & Systèmes Multi-Agents  
-> Construction d'un Système Multi-Agents avec RAG & Orchestration LangChain
+> Continuous assessment project — Distributed AI & Multi-Agent Systems
+> Building a Multi-Agent System with RAG & LangChain Orchestration
 
 ---
 
-## 📋 Table des matières
+## 📋 Table of Contents
 
-- [Présentation & Justification](#présentation--justification)
+- [Overview & Rationale](#overview--rationale)
 - [Architecture](#architecture)
-- [Stack technique](#stack-technique)
-- [Structure du projet](#structure-du-projet)
-- [Les 10 agents](#les-10-agents)
-- [Pipeline RAG](#pipeline-rag)
-- [Flux d'orchestration](#flux-dorchestration)
-- [Orchestration LangGraph](#orchestration-langgraph)
-- [Mémoire](#mémoire)
-- [API FastAPI](#api-fastapi)
-- [Données de test](#données-de-test)
-- [RAG vs Sans RAG](#rag-vs-sans-rag)
+- [Tech Stack](#tech-stack)
+- [Project Structure](#project-structure)
+- [The 10 Agents](#the-10-agents)
+- [RAG Pipeline](#rag-pipeline)
+- [Orchestration Flow](#orchestration-flow)
+- [LangGraph Orchestration](#langgraph-orchestration)
+- [Memory](#memory)
+- [FastAPI](#fastapi)
+- [Test Data](#test-data)
+- [RAG vs Without RAG](#rag-vs-without-rag)
 - [Installation](#installation)
-- [Lancer le projet](#lancer-le-projet)
+- [Running the Project](#running-the-project)
 - [Tests](#tests)
-- [Résultats](#résultats)
+- [Results](#results)
 
 ---
 
-## 🎯 Présentation & Justification
+## 🎯 Overview & Rationale
 
-### Le projet
+### The Project
 
-Speny est un système multi-agents IA de gestion financière personnelle.
-Il analyse les transactions d'un utilisateur, détecte les anomalies,
-prédit les dépenses futures, simule des scénarios what-if et génère
-des recommandations personnalisées en langage naturel.
+Speny is an AI-powered multi-agent system for personal finance management.
+It analyzes a user's transactions, detects anomalies, predicts future
+expenses, simulates what-if scenarios, and generates personalized
+recommendations in natural language.
 
-**Exemples de questions supportées :**
+**Example supported questions:**
 
-- _"Est-ce que j'ai dépassé mon budget ce mois-ci ?"_
-- _"Combien vais-je dépenser le mois prochain ?"_
-- _"Que se passe-t-il si je réduis mes dépenses de 20% ?"_
-- _"Donne-moi une analyse complète de mes finances"_
+- _"Have I exceeded my budget this month?"_
+- _"How much will I spend next month?"_
+- _"What happens if I cut my spending by 20%?"_
+- _"Give me a full analysis of my finances"_
 
-### Justification du cas d'usage
+### Rationale for the Use Case
 
-La gestion financière personnelle est un domaine particulièrement adapté
-à une architecture multi-agents pour trois raisons :
+Personal finance management is particularly well-suited to a multi-agent
+architecture for three reasons:
 
-1. **Multidimensionnalité** — Une analyse financière complète nécessite
-   simultanément : détection d'anomalies, prévisions ML, analyse comportementale,
-   suivi d'objectifs et simulation de scénarios. Aucun agent unique ne peut
-   couvrir efficacement toutes ces dimensions.
+1. **Multidimensionality** — A complete financial analysis simultaneously
+   requires anomaly detection, ML forecasting, behavioral analysis, goal
+   tracking, and scenario simulation. No single agent can efficiently cover
+   all these dimensions.
 
-2. **Données privées & RAG** — Les transactions bancaires sont des données
-   privées non présentes dans les LLMs. Le RAG est indispensable pour ancrer
-   les réponses dans les données réelles de l'utilisateur, évitant toute
-   hallucination sur les montants ou les dates.
+2. **Private Data & RAG** — Bank transactions are private data not present
+   in LLMs. RAG is essential to ground responses in the user's real data,
+   preventing any hallucination on amounts or dates.
 
-3. **Spécialisation des agents** — Chaque aspect (budget, comportement, prévision,
-   simulation) requiert une logique métier distincte. La séparation en agents
-   spécialisés permet une maintenance claire et une extensibilité naturelle.
+3. **Agent Specialization** — Each aspect (budget, behavior, forecasting,
+   simulation) requires distinct business logic. Splitting into specialized
+   agents enables clear maintainability and natural extensibility.
 
 ---
 
 ## 🏗️ Architecture
 
 ```
-Question utilisateur
+User question
         ↓
 ┌─────────────────────────┐
-│      LangGraph          │  ← Routage conditionnel
-│   (graph.py)            │     analyse la question
-└─────────────────────────┘     décide quels agents appeler
+│      LangGraph          │  ← Conditional routing
+│   (graph.py)            │     analyzes the question
+└─────────────────────────┘     decides which agents to call
         ↓
 ┌──────────────────────────────────────────────────┐
 │                  ADVICE AGENT                    │
-│            (orchestrateur central)               │
+│            (central orchestrator)                │
 └──────────────────────────────────────────────────┘
-        ↓ appelle selon le besoin
+        ↓ calls as needed
 ┌────────┬────────┬─────────┬───────────┬──────────┬──────────┐
 │ Budget │  Goal  │ Anomaly │Behavioral │  Persona │ Forecast │
 │ Agent  │ Agent  │  Agent  │   Agent   │  Agent   │  Agent   │
 └────────┴────────┴─────────┴───────────┴──────────┴──────────┘
-        ↓ enrichi par
+        ↓ enriched by
 ┌──────────────────┐    ┌──────────────────┐
 │  Retrieval Agent │    │ Simulation Agent │
-│  (RAG + ReAct)   │    │  (scénarios)     │
+│  (RAG + ReAct)   │    │  (scenarios)     │
 └──────────────────┘    └──────────────────┘
         ↓
 ┌──────────────────────┐
-│  Explanation Agent   │  ← Traduit en langage simple
+│  Explanation Agent   │  ← Translates into plain language
 └──────────────────────┘
         ↓
-   Réponse finale
+   Final response
 ```
 
 ---
 
-## 🛠️ Stack technique
+## 🛠️ Tech Stack
 
-| Composant         | Technologie                             |
+| Component         | Technology                              |
 | ----------------- | --------------------------------------- |
-| Langage           | Python 3.10                             |
+| Language          | Python 3.10                             |
 | LLM               | Groq — llama-3.3-70b-versatile          |
-| Orchestration LLM | LangChain 0.3.x + LangGraph             |
+| LLM Orchestration | LangChain 0.3.x + LangGraph             |
 | RAG               | LlamaIndex + ChromaDB                   |
 | Embeddings        | all-MiniLM-L6-v2 (SentenceTransformers) |
-| Prévisions ML     | LSTM (TensorFlow/Keras)                 |
-| Base de données   | Firebase Firestore                      |
+| ML Forecasting    | LSTM (TensorFlow/Keras)                 |
+| Database          | Firebase Firestore                      |
 | API               | FastAPI + Uvicorn                       |
-| Pattern agents    | ReAct (Reasoning + Acting)              |
+| Agent Pattern     | ReAct (Reasoning + Acting)              |
 
 ---
 
-## 📁 Structure du projet
+## 📁 Project Structure
 
 ```
 spendwise/
 ├── agents/
-│   ├── budget_agent.py         # Analyse budgétaire mensuelle
-│   ├── goal_agent.py           # Suivi des objectifs financiers
-│   ├── anomaly_agent.py        # Détection d'anomalies statistiques
-│   ├── behavioral_agent.py     # Analyse des habitudes de dépenses
-│   ├── persona_agent.py        # Profil financier (scoring)
-│   ├── forecast_agent.py       # Prévisions LSTM
-│   ├── simulation_agent.py     # Scénarios what-if
-│   ├── retrieval_agent.py      # RAG sémantique + ReAct
-│   ├── advice_agent.py         # Orchestrateur central
-│   └── explanation_agent.py    # Traduction en langage naturel
+│   ├── budget_agent.py         # Monthly budget analysis
+│   ├── goal_agent.py           # Financial goal tracking
+│   ├── anomaly_agent.py        # Statistical anomaly detection
+│   ├── behavioral_agent.py     # Spending habit analysis
+│   ├── persona_agent.py        # Financial profile (scoring)
+│   ├── forecast_agent.py       # LSTM forecasting
+│   ├── simulation_agent.py     # What-if scenarios
+│   ├── retrieval_agent.py      # Semantic RAG + ReAct
+│   ├── advice_agent.py         # Central orchestrator
+│   └── explanation_agent.py    # Natural language translation
 ├── orchestration/
-│   └── graph.py                # Workflow conditionnel LangGraph
+│   └── graph.py                # Conditional workflow with LangGraph
 ├── memory/
-│   ├── short_term.py           # Mémoire de session (RAM)
-│   └── long_term.py            # Mémoire persistante (Firestore)
+│   ├── short_term.py           # Session memory (RAM)
+│   └── long_term.py            # Persistent memory (Firestore)
 ├── rag/
-│   ├── indexer.py              # Indexation ChromaDB
-│   └── query_engine.py         # Recherche sémantique
+│   ├── indexer.py              # ChromaDB indexing
+│   └── query_engine.py         # Semantic search
 ├── data/
-│   └── firebase_client.py      # Client Firestore
+│   └── firebase_client.py      # Firestore client
 ├── api/
-│   └── main.py                 # API FastAPI
+│   └── main.py                 # FastAPI
 ├── config/
 │   └── settings.py             # Configuration (.env)
 ├── tests/
-│   └── test_agents.py          # Tests de tous les agents
-├── .env.example                # Variables d'environnement
-└── requirements.txt            # Dépendances Python
+│   └── test_agents.py          # Tests for all agents
+├── .env.example                # Environment variables
+└── requirements.txt            # Python dependencies
 ```
 
 ---
 
-## 🤖 Les 10 agents
+## 🤖 The 10 Agents
 
 ### 1. Budget Agent
 
-**Rôle :** Analyse les dépenses du mois courant et détecte les dépassements de budget.
+**Role:** Analyzes current month spending and detects budget overruns.
 
-**Outils :** Requêtes Firestore directes (transactions + budgets du mois)
+**Tools:** Direct Firestore queries (transactions + monthly budgets)
 
-**Logique :**
+**Logic:**
 
-- Calcule les dépenses réelles par catégorie
-- Compare aux budgets définis par l'utilisateur
-- Calcule le taux de consommation (%) et alerte sur les dépassements
+- Computes actual spending per category
+- Compares against user-defined budgets
+- Calculates consumption rate (%) and alerts on overruns
 
-**Prompt :** Reçoit un résumé structuré des dépenses vs budgets et génère
-une analyse textuelle avec les catégories à risque.
+**Prompt:** Receives a structured summary of spending vs. budget and generates
+a textual analysis highlighting at-risk categories.
 
 ---
 
 ### 2. Goal Agent
 
-**Rôle :** Suit la progression vers les objectifs financiers.
+**Role:** Tracks progress toward financial goals.
 
-**Outils :** Requêtes Firestore (transactions, revenus, objectifs)
+**Tools:** Firestore queries (transactions, income, goals)
 
-**Logique :**
+**Logic:**
 
-- Calcule l'épargne mensuelle disponible (revenus - dépenses)
-- Estime le temps restant pour atteindre chaque objectif
-- Identifie les objectifs prioritaires selon la progression
+- Calculates available monthly savings (income - expenses)
+- Estimates time remaining to reach each goal
+- Identifies priority goals based on progress
 
-**Prompt :** Reçoit les objectifs et l'épargne disponible, génère un plan
-de priorisation en langage naturel.
+**Prompt:** Receives goals and available savings, generates a prioritization
+plan in natural language.
 
 ---
 
 ### 3. Anomaly Agent
 
-**Rôle :** Détecte les dépenses inhabituelles par analyse statistique.
+**Role:** Detects unusual spending through statistical analysis.
 
-**Outils :** Requêtes Firestore + calculs statistiques (moyenne, écart-type)
+**Tools:** Firestore queries + statistical calculations (mean, standard deviation)
 
-**Logique :**
+**Logic:**
 
-- Calcule la moyenne et l'écart-type par marchand sur l'historique
-- Identifie les transactions dépassant 2 écarts-types
-- Supporte 3 modes : `monthly`, `global`, `all_months`
+- Calculates mean and standard deviation per merchant over historical data
+- Identifies transactions exceeding 2 standard deviations
+- Supports 3 modes: `monthly`, `global`, `all_months`
 
-**Prompt :** Reçoit la liste des anomalies détectées et génère une explication
-des transactions suspectes avec leur contexte.
+**Prompt:** Receives the list of detected anomalies and generates an explanation
+of suspicious transactions with their context.
 
 ---
 
 ### 4. Behavioral Agent
 
-**Rôle :** Analyse les patterns de comportement financier.
+**Role:** Analyzes financial behavior patterns.
 
-**Outils :** Requêtes Firestore (historique complet des transactions)
+**Tools:** Firestore queries (full transaction history)
 
-**Logique :**
+**Logic:**
 
-- Identifie le jour de la semaine le plus dépensier
-- Détermine la catégorie dominante en volume et en fréquence
-- Calcule la tendance générale (hausse/baisse en %)
-- Analyse la fréquence des dépenses par catégorie
+- Identifies the most expensive day of the week
+- Determines the dominant category by volume and frequency
+- Calculates the overall trend (% increase/decrease)
+- Analyzes spending frequency per category
 
-**Prompt :** Reçoit les statistiques comportementales agrégées et génère
-des insights sur les habitudes de dépenses de l'utilisateur.
+**Prompt:** Receives aggregated behavioral statistics and generates insights
+on the user's spending habits.
 
 ---
 
 ### 5. Persona Agent
 
-**Rôle :** Calcule le profil financier de l'utilisateur avec un scoring 0-100.
+**Role:** Calculates the user's financial profile with a 0–100 score.
 
-**Outils :** Agrège les résultats du Budget Agent et du Goal Agent
+**Tools:** Aggregates results from Budget Agent and Goal Agent
 
-**Logique :**
+**Logic:**
 
-- Score épargne (0-40) : taux d'épargne mensuel
-- Score discipline budget (0-40) : respect des budgets définis
-- Score régularité (0-20) : stabilité des dépenses dans le temps
-- Attribution d'un type de profil selon le score total
-- Calcul de la tolérance au risque (faible / modérée / élevée)
+- Savings score (0–40): monthly savings rate
+- Budget discipline score (0–40): adherence to defined budgets
+- Regularity score (0–20): stability of spending over time
+- Assigns a profile type based on the total score
+- Calculates risk tolerance (low / moderate / high)
 
-**Prompt :** Reçoit les scores calculés et génère un portrait financier
-personnalisé avec des recommandations adaptées au profil.
+**Prompt:** Receives calculated scores and generates a personalized financial
+portrait with recommendations tailored to the profile.
 
 ---
 
 ### 6. Forecast Agent
 
-**Rôle :** Prédit les dépenses du mois prochain avec un modèle LSTM.
+**Role:** Predicts next month's spending using an LSTM model.
 
-**Outils :** Modèle LSTM entraîné sur l'historique Firestore (TensorFlow/Keras)
+**Tools:** LSTM model trained on Firestore history (TensorFlow/Keras)
 
-**Logique :**
+**Logic:**
 
-- Entraîne un LSTM distinct par catégorie de dépense
-- Utilise une fenêtre glissante de 3 mois pour la prédiction
-- Calcule la tendance (hausse/baisse en %) vs le mois précédent
-- Identifie les catégories à risque de dépassement budgétaire
+- Trains a separate LSTM per spending category
+- Uses a 3-month sliding window for prediction
+- Calculates trend (% increase/decrease) vs. the previous month
+- Identifies categories at risk of budget overrun
 
-> Note : LlamaIndex est utilisé pour le chargement du modèle LSTM.
-> Le message `"LLM is explicitly disabled. Using MockLLM."` au démarrage
-> est normal et n'est pas une erreur.
+> Note: LlamaIndex is used for loading the LSTM model.
+> The message `"LLM is explicitly disabled. Using MockLLM."` at startup
+> is expected and not an error.
 
-**Prompt :** Reçoit les prévisions par catégorie et génère une analyse
-prospective avec les points de vigilance pour le mois suivant.
+**Prompt:** Receives per-category forecasts and generates a forward-looking
+analysis with watch points for the coming month.
 
 ---
 
 ### 7. Simulation Agent
 
-**Rôle :** Simule des scénarios financiers what-if.
+**Role:** Simulates what-if financial scenarios.
 
-**Outils :** Calculs financiers sur les données Firestore
+**Tools:** Financial calculations on Firestore data
 
-**3 scénarios disponibles :**
+**3 available scenarios:**
 
-- `category_reduction` : impact d'une réduction de dépenses sur une catégorie
-- `income_increase` : impact d'une augmentation de revenus sur l'épargne
-- `goal_achievement` : estimation du temps pour atteindre un objectif
+- `category_reduction`: impact of reducing spending in a category
+- `income_increase`: impact of an income increase on savings
+- `goal_achievement`: estimated time to reach a goal
 
-**Prompt :** Reçoit les résultats chiffrés de la simulation et génère
-une explication de l'impact concret sur la situation financière.
+**Prompt:** Receives the simulation's numerical results and generates an
+explanation of the concrete impact on the financial situation.
 
 ---
 
 ### 8. Retrieval Agent _(ReAct)_
 
-**Rôle :** Répond à des questions en langage naturel via RAG + ReAct.
+**Role:** Answers natural language questions via RAG + ReAct.
 
-**Pattern ReAct implémenté :**
+**ReAct Pattern Implemented:**
 
 ```
 Question → Thought → Action → Observation → Final Answer
 ```
 
-> ⚠️ Note technique : LangChain 1.2.17 ne fournit pas `create_react_agent`.
-> Le pattern ReAct est implémenté manuellement via deux PromptTemplates
-> enchaînés (step1 → parse → tool → step2) dans `retrieval_agent.py`.
+> ⚠️ Technical note: LangChain 1.2.17 does not provide `create_react_agent`.
+> The ReAct pattern is implemented manually via two chained PromptTemplates
+> (step1 → parse → tool → step2) in `retrieval_agent.py`.
 
-**3 outils disponibles :**
+**3 available tools:**
 
-- `RechercheRAG` : recherche sémantique dans ChromaDB (506 documents)
-- `ResumeFinancier` : résumé structuré des 30 derniers jours depuis Firestore
-- `BudgetStatus` : statut exact des budgets via Budget Agent
+- `RAGSearch`: semantic search in ChromaDB (506 documents)
+- `FinancialSummary`: structured summary of the last 30 days from Firestore
+- `BudgetStatus`: exact budget status via Budget Agent
 
-**Prompt step1 :** Analyse la question et décide quel outil utiliser
+**Prompt step1:** Analyzes the question and decides which tool to use
 (Thought + Action).
 
-**Prompt step2 :** Reçoit l'observation de l'outil et génère la réponse finale
-en langage naturel.
+**Prompt step2:** Receives the tool's observation and generates the final
+response in natural language.
 
 ---
 
-### 9. Advice Agent _(Orchestrateur)_
+### 9. Advice Agent _(Orchestrator)_
 
-**Rôle :** Agrège tous les agents et génère une recommandation globale cohérente.
+**Role:** Aggregates all agents and generates a coherent global recommendation.
 
-**Outils :** Appelle directement les 6 agents spécialisés
+**Tools:** Directly calls the 6 specialized agents
 
-**4 modes disponibles :**
+**4 available modes:**
 
-- `full` (~90s) : Budget + Goal + Anomaly + Behavioral + Persona + Forecast
-- `quick` (~20s) : Budget + Goal uniquement
-- `forecast` (~30s) : Forecast + Persona
-- `profile` (~15s) : Persona uniquement
+- `full` (~90s): Budget + Goal + Anomaly + Behavioral + Persona + Forecast
+- `quick` (~20s): Budget + Goal only
+- `forecast` (~30s): Forecast + Persona
+- `profile` (~15s): Persona only
 
-**Prompt :** Reçoit les résumés de chaque agent et génère une synthèse
-cohérente avec des recommandations prioritaires classées par impact.
+**Prompt:** Receives summaries from each agent and generates a coherent
+synthesis with priority recommendations ranked by impact.
 
 ---
 
 ### 10. Explanation Agent
 
-**Rôle :** Traduit les outputs techniques en langage naturel simple.
+**Role:** Translates technical outputs into simple natural language.
 
-**Outils :** Appelle n'importe quel agent et post-traite sa réponse
+**Tools:** Calls any agent and post-processes its response
 
-**3 audiences supportées :**
+**3 supported audiences:**
 
-- `grand public` : langage simple, analogies du quotidien, emojis
-- `expert` : terminologie financière, chiffres détaillés, tendances
-- `débutant` : explications pas-à-pas, définitions des concepts
+- `general public`: plain language, everyday analogies, emojis
+- `expert`: financial terminology, detailed figures, trends
+- `beginner`: step-by-step explanations, concept definitions
 
-**Prompt :** Reçoit l'output brut d'un agent et le reformule selon
-l'audience cible avec la structure et le vocabulaire appropriés.
+**Prompt:** Receives a raw agent output and reformulates it for the target
+audience using appropriate structure and vocabulary.
 
 ---
 
-## 🔍 Pipeline RAG
+## 🔍 RAG Pipeline
 
-### Vue d'ensemble
+### Overview
 
 ```
-Firestore (données privées)
+Firestore (private data)
         ↓
    indexer.py
    ┌─────────────────────────────────────────┐
-   │  1. Récupération des données Firestore  │
-   │  2. Conversion en Documents LlamaIndex  │
-   │  3. Chunking par transaction            │
-   │  4. Génération des embeddings           │
+   │  1. Fetch data from Firestore           │
+   │  2. Convert to LlamaIndex Documents     │
+   │  3. Chunking per transaction            │
+   │  4. Embedding generation                │
    │     (all-MiniLM-L6-v2)                  │
-   │  5. Stockage dans ChromaDB              │
+   │  5. Store in ChromaDB                   │
    └─────────────────────────────────────────┘
         ↓
-   ChromaDB (506 documents indexés)
+   ChromaDB (506 documents indexed)
         ↓
    query_engine.py
    ┌─────────────────────────────────────────┐
-   │  1. Embedding de la question            │
-   │  2. Recherche par similarité cosinus    │
-   │  3. Récupération top-k documents        │
-   │  4. Injection dans le prompt LLM        │
+   │  1. Embed the question                  │
+   │  2. Cosine similarity search            │
+   │  3. Retrieve top-k documents            │
+   │  4. Inject into LLM prompt              │
    └─────────────────────────────────────────┘
         ↓
-   Retrieval Agent → Réponse contextualisée
+   Retrieval Agent → Contextualized response
 ```
 
-### Type de données indexées
+### Types of Indexed Data
 
-| Type         | Volume | Champs indexés                                  |
+| Type         | Volume | Indexed Fields                                  |
 | ------------ | ------ | ----------------------------------------------- |
-| Transactions | ~500   | montant, date, marchand, catégorie, description |
-| Budgets      | ~5     | catégorie, montant mensuel alloué               |
-| Objectifs    | ~4     | nom, montant cible, progression actuelle        |
+| Transactions | ~500   | amount, date, merchant, category, description   |
+| Budgets      | ~5     | category, allocated monthly amount              |
+| Goals        | ~4     | name, target amount, current progress           |
 
-### Stratégie de chunking
+### Chunking Strategy
 
-Chaque transaction est indexée comme un **document atomique indépendant**.
-Ce choix est justifié par la nature des données :
+Each transaction is indexed as an **independent atomic document**.
+This choice is justified by the nature of the data:
 
-- Une transaction est une unité sémantique complète (qui, quand, combien, où)
-- Le chunking par phrase n'est pas adapté à des données tabulaires structurées
-- La granularité fine permet une recherche précise sur un marchand ou une date
+- A transaction is a complete semantic unit (who, when, how much, where)
+- Sentence-level chunking is not suited to structured tabular data
+- Fine granularity enables precise search by merchant or date
 
-**Format d'un document indexé :**
+**Format of an indexed document:**
 
 ```
-Transaction: 450.0 MAD chez Carrefour le 2026-03-15
-Catégorie: Food | Marchand: Carrefour
+Transaction: 450.0 MAD at Carrefour on 2026-03-15
+Category: Food | Merchant: Carrefour
 ```
 
-### Modèle d'embedding
+### Embedding Model
 
-- **Modèle :** `all-MiniLM-L6-v2` (SentenceTransformers)
-- **Dimension :** 384
-- **Choix :** Léger, rapide, multilingue, performant sur des textes courts
+- **Model:** `all-MiniLM-L6-v2` (SentenceTransformers)
+- **Dimension:** 384
+- **Choice:** Lightweight, fast, multilingual, performant on short texts
 
 ### Vector Store
 
-- **ChromaDB** en mode persistant local (`./chroma_db`)
-- Similarité cosinus pour la recherche
-- Top-5 documents retournés par requête
+- **ChromaDB** in local persistent mode (`./chroma_db`)
+- Cosine similarity for search
+- Top-5 documents returned per query
 
 ---
 
-## 🔄 Flux d'orchestration
+## 🔄 Orchestration Flow
 
-### Comment les agents collaborent
+### How Agents Collaborate
 
-La collaboration entre agents suit un flux en deux niveaux :
+Agent collaboration follows a two-level flow:
 
-**Niveau 1 — LangGraph route la question**
+**Level 1 — LangGraph routes the question**
 
 ```
-Question → Classificateur LLM → Node approprié → Agents ciblés
+Question → LLM Classifier → Appropriate Node → Targeted Agents
 ```
 
-**Niveau 2 — Advice Agent orchestre les agents spécialisés**
+**Level 2 — Advice Agent orchestrates specialized agents**
 
 ```
 Advice Agent
-    ├── appelle Budget Agent  → résumé budget
-    ├── appelle Goal Agent    → résumé objectifs
-    ├── appelle Anomaly Agent → résumé anomalies
-    ├── appelle Behavioral Agent → résumé comportement
-    ├── appelle Persona Agent → profil utilisateur
-    ├── appelle Forecast Agent → prévisions
-    └── fusionne les 6 résumés → prompt LLM → réponse synthétique
+    ├── calls Budget Agent    → budget summary
+    ├── calls Goal Agent      → goals summary
+    ├── calls Anomaly Agent   → anomaly summary
+    ├── calls Behavioral Agent→ behavior summary
+    ├── calls Persona Agent   → user profile
+    ├── calls Forecast Agent  → forecasts
+    └── merges 6 summaries → LLM prompt → synthetic response
 ```
 
-**Niveau 3 — Enrichissement contextuel**
+**Level 3 — Contextual enrichment**
 
 ```
-Retrieval Agent (RAG) ──→ injecte le contexte des transactions
-                           dans n'importe quel agent qui le demande
+Retrieval Agent (RAG) ──→ injects transaction context
+                           into any agent that requests it
 ```
 
-**Niveau 4 — Post-traitement**
+**Level 4 — Post-processing**
 
 ```
-Explanation Agent ──→ reçoit l'output de l'Advice Agent
-                       reformule selon l'audience cible
+Explanation Agent ──→ receives Advice Agent output
+                       reformulates for the target audience
 ```
 
-### Exemple de scénario complet
+### Full Scenario Example
 
 ```
-Utilisateur : "Analyse complète de mes finances"
+User: "Full analysis of my finances"
         ↓
-LangGraph → node "full"
+LangGraph → "full" node
         ↓
-Advice Agent (mode full)
-    ├── Budget Agent    → "Food dépassé à 185%"
-    ├── Goal Agent      → "Épargne 4940 MAD/mois"
-    ├── Anomaly Agent   → "14 anomalies détectées"
-    ├── Behavioral Agent→ "Mardi jour le plus dépensier"
-    ├── Persona Agent   → "Score 48/100"
-    └── Forecast Agent  → "21730 MAD prévus"
+Advice Agent (full mode)
+    ├── Budget Agent     → "Food exceeded at 185%"
+    ├── Goal Agent       → "Savings 4940 MAD/month"
+    ├── Anomaly Agent    → "14 anomalies detected"
+    ├── Behavioral Agent → "Tuesday most expensive day"
+    ├── Persona Agent    → "Score 48/100"
+    └── Forecast Agent   → "21,730 MAD forecast"
         ↓
-LLM synthétise les 6 résumés
+LLM synthesizes the 6 summaries
         ↓
-Explanation Agent → reformule pour le grand public
+Explanation Agent → reformulates for the general public
         ↓
-Réponse finale en langage naturel
+Final response in natural language
 ```
 
 ---
 
-## 🕸️ Orchestration LangGraph
+## 🕸️ LangGraph Orchestration
 
-LangGraph implémente un workflow conditionnel qui évite d'appeler
-tous les agents pour chaque question.
+LangGraph implements a conditional workflow that avoids calling
+all agents for every question.
 
 ```
-"Budget dépassé ?"     → router → budget node    (2 agents)
-"Prévisions ?"         → router → forecast node  (2 agents)
-"Dépenses bizarres ?"  → router → anomaly node   (1 agent)
-"Analyse complète ?"   → router → full node      (6 agents)
+"Budget exceeded?"     → router → budget node    (2 agents)
+"Forecasts?"           → router → forecast node  (2 agents)
+"Unusual spending?"    → router → anomaly node   (1 agent)
+"Full analysis?"       → router → full node      (6 agents)
 ```
 
-**Nodes du graph :**
+**Graph Nodes:**
 
-| Node         | Agents appelés                   |
+| Node         | Agents Called                    |
 | ------------ | -------------------------------- |
 | `budget`     | Budget Agent + Goal Agent        |
 | `forecast`   | Forecast Agent + Persona Agent   |
 | `anomaly`    | Anomaly Agent                    |
 | `behavioral` | Behavioral Agent + Persona Agent |
 | `persona`    | Persona Agent                    |
-| `full`       | Tous les agents via Advice Agent |
-| `aggregator` | Fusion des résultats + LLM final |
+| `full`       | All agents via Advice Agent      |
+| `aggregator` | Results fusion + final LLM       |
 
 ---
 
-## 🧠 Mémoire
+## 🧠 Memory
 
-### Court terme (`memory/short_term.py`)
+### Short-Term (`memory/short_term.py`)
 
-Stocke l'historique de la conversation en RAM.
-Réinitialisée à chaque redémarrage.
+Stores conversation history in RAM.
+Reset on each restart.
 
 ```python
 session = session_manager.get_session(user_id)
-session.add_user_message("Comment vont mes finances ?")
-session.add_assistant_message("Analyse en cours...")
+session.add_user_message("How are my finances?")
+session.add_assistant_message("Analyzing...")
 history = session.get_history_as_text()
 ```
 
-### Long terme (`memory/long_term.py`)
+### Long-Term (`memory/long_term.py`)
 
-Persiste les données dans Firestore.
-Survit aux redémarrages.
+Persists data in Firestore.
+Survives restarts.
 
 ```python
-# Préférences utilisateur
-save_preferences(user_id, {"mode": "quick", "audience": "grand public"})
+# User preferences
+save_preferences(user_id, {"mode": "quick", "audience": "general public"})
 
-# Historique des conseils
+# Advice history
 save_advice_to_history(user_id, question, answer, agents_used)
 
-# Notes personnelles
-save_user_note(user_id, "Économiser pour un objectif en décembre")
+# Personal notes
+save_user_note(user_id, "Save for a goal in December")
 ```
 
 ---
 
-## 🚀 API FastAPI
+## 🚀 FastAPI
 
-L'API expose tous les agents via des endpoints REST.
+The API exposes all agents via REST endpoints.
 
-**Documentation interactive :** http://127.0.0.1:8000/docs
+**Interactive documentation:** http://127.0.0.1:8000/docs
 
-| Méthode | Endpoint                    | Description                      |
-| ------- | --------------------------- | -------------------------------- |
-| GET     | `/health`                   | Statut de l'API                  |
-| POST    | `/api/advice`               | Analyse complète (orchestrateur) |
-| POST    | `/api/chat`                 | Question libre (RAG + ReAct)     |
-| GET     | `/api/budget/{user_id}`     | Analyse budgétaire               |
-| GET     | `/api/goals/{user_id}`      | Objectifs financiers             |
-| POST    | `/api/anomalies`            | Détection d'anomalies            |
-| GET     | `/api/behavioral/{user_id}` | Habitudes de dépenses            |
-| GET     | `/api/persona/{user_id}`    | Profil financier                 |
-| GET     | `/api/forecast/{user_id}`   | Prévisions LSTM                  |
-| POST    | `/api/simulate`             | Simulation de scénarios          |
-| POST    | `/api/explain`              | Explication en langage simple    |
-| POST    | `/api/explain/concept`      | Explication d'un concept         |
+| Method | Endpoint                    | Description                      |
+| ------ | --------------------------- | -------------------------------- |
+| GET    | `/health`                   | API status                       |
+| POST   | `/api/advice`               | Full analysis (orchestrator)     |
+| POST   | `/api/chat`                 | Free question (RAG + ReAct)      |
+| GET    | `/api/budget/{user_id}`     | Budget analysis                  |
+| GET    | `/api/goals/{user_id}`      | Financial goals                  |
+| POST   | `/api/anomalies`            | Anomaly detection                |
+| GET    | `/api/behavioral/{user_id}` | Spending habits                  |
+| GET    | `/api/persona/{user_id}`    | Financial profile                |
+| GET    | `/api/forecast/{user_id}`   | LSTM forecasts                   |
+| POST   | `/api/simulate`             | Scenario simulation              |
+| POST   | `/api/explain`              | Plain-language explanation       |
+| POST   | `/api/explain/concept`      | Concept explanation              |
 
 ---
 
-## 🗄️ Données de test
+## 🗄️ Test Data
 
-### Utilisateur de test
+### Test User
 
 ```
 USER_ID   : S6pwTrQB8R7GyuvBdyp0
-Currency  : MAD (dirhams marocains)
-Période   : mars 2025 → avril 2026
+Currency  : MAD (Moroccan dirhams)
+Period    : March 2025 → April 2026
 Volume    : ~500 transactions
 ```
 
-### Données disponibles dans Firestore
+### Data Available in Firestore
 
-| Collection     | Contenu                                                |
+| Collection     | Contents                                               |
 | -------------- | ------------------------------------------------------ |
-| `transactions` | ~500 transactions (montant, date, marchand, catégorie) |
-| `budgets`      | Food (4000 MAD/mois), Education (552 MAD/mois)         |
+| `transactions` | ~500 transactions (amount, date, merchant, category)   |
+| `budgets`      | Food (4000 MAD/month), Education (552 MAD/month)       |
 | `goals`        | Trip Japan (40%), New Laptop (60%), New House (0%)     |
 
-### Réindexer les données dans ChromaDB
+### Re-indexing Data into ChromaDB
 
-Si ChromaDB est vide ou doit être reconstruit, lancer :
+If ChromaDB is empty or needs to be rebuilt, run:
 
 ```bash
 python -m rag.indexer
 ```
 
-Cela récupère toutes les données Firestore et reconstruit l'index vectoriel
-(~506 documents, durée ~30 secondes).
+This fetches all Firestore data and rebuilds the vector index
+(~506 documents, ~30 seconds).
 
 ---
 
-## ⚖️ RAG vs Sans RAG
+## ⚖️ RAG vs Without RAG
 
-Le RAG est central dans SpendWise. Voici la différence concrète :
+RAG is central to Speny. Here is the concrete difference:
 
-### Sans RAG — Réponse générique et incorrecte
-
-```
-Question : "Est-ce que j'ai dépassé mon budget ce mois-ci ?"
-
-Réponse LLM (sans RAG) :
-"Il est difficile de répondre sans connaître vos données financières.
-En général, un budget est dépassé lorsque les dépenses excèdent les
-revenus alloués. Je vous recommande de vérifier votre application bancaire."
-```
-
-→ Réponse inutile, aucune donnée réelle, aucune valeur ajoutée.
-
-### Avec RAG — Réponse précise et contextualisée
+### Without RAG — Generic and Incorrect Response
 
 ```
-Question : "Est-ce que j'ai dépassé mon budget ce mois-ci ?"
+Question: "Have I exceeded my budget this month?"
 
-Contexte injecté par RAG (extrait ChromaDB) :
-- Budget Food : 4000 MAD/mois
-- Dépenses Food avril 2026 : 7431 MAD
-- Transactions : Carrefour 450 MAD, Restaurant X 320 MAD...
-
-Réponse LLM (avec RAG) :
-"Oui, votre budget Food est dépassé à 185.8% en avril 2026.
-Vous avez dépensé 7431 MAD pour un budget de 4000 MAD, soit
-un dépassement de 3431 MAD. Les principales dépenses proviennent
-de Carrefour et des restaurants. Je recommande de réduire les
-sorties au restaurant pour les prochaines semaines."
+LLM response (without RAG):
+"It is difficult to answer without knowing your financial data.
+Generally, a budget is exceeded when expenses surpass the allocated
+income. I recommend checking your banking application."
 ```
 
-→ Réponse précise, chiffrée, actionnable, ancrée dans les vraies données.
+→ Useless response, no real data, no added value.
+
+### With RAG — Precise and Contextualized Response
+
+```
+Question: "Have I exceeded my budget this month?"
+
+Context injected by RAG (ChromaDB excerpt):
+- Food budget: 4000 MAD/month
+- Food spending April 2026: 7431 MAD
+- Transactions: Carrefour 450 MAD, Restaurant X 320 MAD...
+
+LLM response (with RAG):
+"Yes, your Food budget is exceeded at 185.8% in April 2026.
+You spent 7431 MAD against a budget of 4000 MAD, an overrun of
+3431 MAD. The main expenses come from Carrefour and restaurants.
+I recommend cutting back on restaurant outings in the coming weeks."
+```
+
+→ Precise, quantified, actionable response anchored in real data.
 
 ---
 
-## 🎁 Livrables inclus
+## 🎁 Deliverables Included
 
-Ce dépôt contient les éléments attendus pour le livrable :
+This repository contains the expected deliverables:
 
-- Code source complet et fonctionnel organisé par agents.
-- `README.md` détaillé avec architecture, installation et exécution.
-- `requirements.txt` listant toutes les dépendances Python.
-- `.env.example` template pour les clés API sans valeurs sensibles.
-- Documentation technique intégrée dans le README.
-- Démonstration possible via l'API FastAPI et les tests de `tests/test_agents.py`.
+- Complete and functional source code organized by agent.
+- Detailed `README.md` with architecture, installation, and execution.
+- `requirements.txt` listing all Python dependencies.
+- `.env.example` API key template without sensitive values.
+- Technical documentation integrated in the README.
+- Demo available via the FastAPI and `tests/test_agents.py`.
 
 ## ⚙️ Installation
 
-### 1. Cloner le projet
+### 1. Clone the Project
 
 ```bash
 git clone
 cd spendwise
 ```
 
-### 2. Créer l'environnement virtuel
+### 2. Create the Virtual Environment
 
 ```bash
 python -m venv .venv
@@ -653,20 +651,20 @@ python -m venv .venv
 source .venv/bin/activate   # Linux/Mac
 ```
 
-### 3. Installer les dépendances
+### 3. Install Dependencies
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### 4. Configurer les variables d'environnement
+### 4. Configure Environment Variables
 
 ```bash
 cp .env.example .env
-# Remplir .env avec tes clés
+# Fill in .env with your keys
 ```
 
-Le fichier `.env` doit contenir :
+The `.env` file must contain:
 
 ```bash
 GROQ_API_KEY=your_groq_key_here
@@ -676,12 +674,12 @@ FIREBASE_CREDENTIALS_PATH=firebase_credentials.json
 CHROMA_PERSIST_DIR=.chroma_db
 ```
 
-### 5. Ajouter les credentials Firebase
+### 5. Add Firebase Credentials
 
-Télécharge le fichier `firebase_credentials.json` depuis la console Firebase
-et place-le à la racine du projet.
+Download the `firebase_credentials.json` file from the Firebase console
+and place it at the project root.
 
-### 6. Indexer les données dans ChromaDB
+### 6. Index Data into ChromaDB
 
 ```bash
 python -m rag.indexer
@@ -689,15 +687,15 @@ python -m rag.indexer
 
 ---
 
-## ▶️ Lancer le projet
+## ▶️ Running the Project
 
-### Lancer l'API
+### Start the API
 
 ```bash
 uvicorn api.main:app --reload --port 8000
 ```
 
-### Accéder à la documentation interactive
+### Access the Interactive Documentation
 
 ```
 http://127.0.0.1:8000/docs
@@ -707,7 +705,7 @@ http://127.0.0.1:8000/docs
 
 ## 🧪 Tests
 
-Tester un agent spécifique :
+Test a specific agent:
 
 ```bash
 python -m tests.test_agents budget
@@ -725,7 +723,7 @@ python -m tests.test_agents graph
 python -m tests.test_agents memory
 ```
 
-Tester tous les agents :
+Test all agents:
 
 ```bash
 python -m tests.test_agents all
@@ -733,26 +731,26 @@ python -m tests.test_agents all
 
 ---
 
-## 📊 Résultats
+## 📊 Results
 
-Résultats obtenus sur l'utilisateur de test (`USER_ID = S6pwTrQB8R7GyuvBdyp0`) :
+Results obtained on the test user (`USER_ID = S6pwTrQB8R7GyuvBdyp0`):
 
-| Agent            | Résultat                                                    |
+| Agent            | Result                                                      |
 | ---------------- | ----------------------------------------------------------- |
-| Budget Agent     | Food dépassé à **185.8%** (7431 MAD / 4000 MAD)             |
-| Goal Agent       | Épargne mensuelle **4940 MAD** (taux 23.4%)                 |
-| Anomaly Agent    | **14 anomalies** détectées sur l'historique                 |
-| Behavioral Agent | Mardi = jour le plus dépensier, Food = **31%** des dépenses |
-| Persona Agent    | Profil **"en développement"**, score **48/100**             |
-| Forecast Agent   | **21 730 MAD** prévus pour le mois prochain (LSTM)          |
-| Simulation Agent | Réduction Food -20% → économie **1 533 MAD/mois**           |
-| Retrieval Agent  | RAG sémantique + ReAct sur **506 documents**                |
-| LangGraph        | Routage conditionnel — **5 routes** possibles               |
-| Mémoire          | Short-term (RAM) + Long-term (Firestore) ✅                 |
-| API FastAPI      | 12 endpoints REST opérationnels ✅                          |
+| Budget Agent     | Food exceeded at **185.8%** (7431 MAD / 4000 MAD)          |
+| Goal Agent       | Monthly savings **4940 MAD** (rate 23.4%)                   |
+| Anomaly Agent    | **14 anomalies** detected across history                    |
+| Behavioral Agent | Tuesday = most expensive day, Food = **31%** of spending    |
+| Persona Agent    | **"Developing"** profile, score **48/100**                  |
+| Forecast Agent   | **21,730 MAD** forecast for next month (LSTM)               |
+| Simulation Agent | Food -20% reduction → savings of **1,533 MAD/month**        |
+| Retrieval Agent  | Semantic RAG + ReAct on **506 documents**                   |
+| LangGraph        | Conditional routing — **5 possible routes**                 |
+| Memory           | Short-term (RAM) + Long-term (Firestore) ✅                 |
+| FastAPI          | 12 operational REST endpoints ✅                            |
 
 ---
 
-## 👥 Auteurs
+## 👥 Authors
 
-Projet réalisé dans le cadre du cours **IA Distribuée & Systèmes Multi-Agents**.
+Project developed as part of the **Distributed AI & Multi-Agent Systems** course.
