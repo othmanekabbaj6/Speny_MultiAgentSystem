@@ -1,4 +1,4 @@
-# 🧠 SpendWise — Système Multi-Agents IA de Gestion Financière
+# Speny — Système Multi-Agents IA de Gestion Financière
 
 > Projet de contrôle continu — IA Distribuée & Systèmes Multi-Agents  
 > Construction d'un Système Multi-Agents avec RAG & Orchestration LangChain
