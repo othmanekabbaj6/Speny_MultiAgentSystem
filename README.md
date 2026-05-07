@@ -30,7 +30,7 @@
 
 ### Le projet
 
-SpendWise est un système multi-agents IA de gestion financière personnelle.
+Speny est un système multi-agents IA de gestion financière personnelle.
 Il analyse les transactions d'un utilisateur, détecte les anomalies,
 prédit les dépenses futures, simule des scénarios what-if et génère
 des recommandations personnalisées en langage naturel.
