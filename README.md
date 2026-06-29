@@ -10,6 +10,7 @@
 - [Overview & Rationale](#overview--rationale)
 - [Architecture](#architecture)
 - [Tech Stack](#tech-stack)
+- [Design Decisions](#design-decisions)
 - [Project Structure](#project-structure)
 - [The 10 Agents](#the-10-agents)
 - [RAG Pipeline](#rag-pipeline)
@@ -19,6 +20,8 @@
 - [FastAPI](#fastapi)
 - [Test Data](#test-data)
 - [RAG vs Without RAG](#rag-vs-without-rag)
+- [Known Limitations](#known-limitations)
+- [What I'd Improve Next](#what-id-improve-next)
 - [Installation](#installation)
 - [Running the Project](#running-the-project)
 - [Tests](#tests)
@@ -109,6 +112,52 @@ User question
 | Database          | Firebase Firestore                      |
 | API               | FastAPI + Uvicorn                       |
 | Agent Pattern     | ReAct (Reasoning + Acting)              |
+
+---
+
+## 🧭 Design Decisions
+
+Key architectural choices made during the project and the reasoning behind them.
+
+### Why LangGraph over a simple chain?
+
+A basic LangChain sequential chain would call every agent on every question —
+wasteful and slow. LangGraph enables **conditional routing**: a lightweight LLM
+classifier first reads the question, then triggers only the relevant subgraph
+(e.g., a budget question activates 2 agents, not 10). This reduced average
+response time from ~90s to ~15–20s for targeted queries.
+
+### Why RAG instead of fine-tuning?
+
+User transaction data is private, dynamic, and user-specific — it changes every
+day and is different for every user. Fine-tuning is static and would require
+retraining per user. RAG grounds every LLM response in the user's actual
+Firestore data at query time, making hallucination on amounts or dates
+structurally impossible.
+
+### Why ChromaDB + LlamaIndex?
+
+ChromaDB runs locally with zero infrastructure cost, which is appropriate for a
+course project and easy to reproduce. LlamaIndex handles the indexing pipeline
+cleanly. Each transaction is indexed as an **atomic document** (not chunked with
+surrounding context) because a transaction is a self-contained semantic unit —
+amount, date, merchant, category — and fine granularity enables precise
+merchant- or date-level retrieval.
+
+### Why `all-MiniLM-L6-v2` for embeddings?
+
+It's lightweight (384 dimensions), fast to run locally, and performs well on
+short structured texts like transaction descriptions. A larger model like
+`text-embedding-3-large` would add latency and cost without meaningful gain on
+this data type.
+
+### Why manual ReAct instead of `create_react_agent`?
+
+LangChain 0.3.x does not expose `create_react_agent` in the version available
+at the time of development. The ReAct loop is implemented manually via two
+chained `PromptTemplate` steps (Thought → Action → Observation → Answer).
+This is a known workaround and a candidate for refactoring if the dependency is
+upgraded.
 
 ---
 
@@ -288,7 +337,7 @@ explanation of the concrete impact on the financial situation.
 Question → Thought → Action → Observation → Final Answer
 ```
 
-> ⚠️ Technical note: LangChain 1.2.17 does not provide `create_react_agent`.
+> ⚠️ Technical note: LangChain 0.3.x does not provide `create_react_agent`.
 > The ReAct pattern is implemented manually via two chained PromptTemplates
 > (step1 → parse → tool → step2) in `retrieval_agent.py`.
 
@@ -623,16 +672,59 @@ I recommend cutting back on restaurant outings in the coming weeks."
 
 ---
 
-## 🎁 Deliverables Included
+## ⚠️ Known Limitations
 
-This repository contains the expected deliverables:
+These are known constraints of the current implementation, documented for
+transparency and future reference.
 
-- Complete and functional source code organized by agent.
-- Detailed `README.md` with architecture, installation, and execution.
-- `requirements.txt` listing all Python dependencies.
-- `.env.example` API key template without sensitive values.
-- Technical documentation integrated in the README.
-- Demo available via the FastAPI and `tests/test_agents.py`.
+**LSTM forecasting on limited data.** The Forecast Agent trains a separate LSTM
+per spending category on ~13 months of transactions. Some categories have fewer
+than 20 data points, which is insufficient for an LSTM to generalize reliably.
+The model still produces directionally useful forecasts, but they should be
+treated as estimates rather than precise predictions. A simpler model like
+Facebook Prophet or even a weighted moving average would likely perform better
+at this data scale.
+
+**Manual ReAct implementation.** The ReAct loop in `retrieval_agent.py` is
+implemented via two chained `PromptTemplate` steps rather than a native
+framework abstraction. This works correctly but is sensitive to LLM output
+formatting — if the model doesn't follow the expected `Thought/Action` structure
+exactly, parsing can fail. This is a known fragility that would be resolved by
+upgrading to a LangChain version with native `create_react_agent` support.
+
+**Integration tests only.** The test suite in `tests/test_agents.py` runs
+agents against real Firestore and Groq API calls. This means tests require
+credentials to run, are slow (~1–2 min for full suite), and cannot run in CI
+without secrets. There are no unit tests with mocked dependencies.
+
+**No error handling or retries on LLM calls.** If Groq returns a rate limit
+error or a malformed response, the current implementation will raise an
+unhandled exception. Production use would require retry logic and graceful
+degradation.
+
+---
+
+## 🚀 What I'd Improve Next
+
+Given more time, these are the highest-priority improvements:
+
+- **Replace LSTM with Prophet for forecasting** — Better suited to short time
+  series, interpretable, handles seasonality automatically, and requires no
+  GPU.
+- **Add unit tests with mocked dependencies** — Each agent should be testable
+  in isolation using `unittest.mock` to stub Firestore and LLM calls, making
+  the test suite fast and CI-friendly.
+- **Upgrade LangChain and use native ReAct** — Replacing the manual two-step
+  prompt chain with `create_react_agent` would make the retrieval agent more
+  robust and easier to maintain.
+- **Add structured error handling** — Wrap all LLM and Firestore calls in
+  try/except with exponential backoff retries and fallback responses so the API
+  degrades gracefully under failure.
+- **Add type hints and docstrings throughout** — Currently absent in most
+  agent files; adding them would significantly improve readability and
+  IDE support.
+
+---
 
 ## ⚙️ Installation
 
@@ -748,6 +840,19 @@ Results obtained on the test user (`USER_ID = S6pwTrQB8R7GyuvBdyp0`):
 | LangGraph        | Conditional routing — **5 possible routes**                 |
 | Memory           | Short-term (RAM) + Long-term (Firestore) ✅                 |
 | FastAPI          | 12 operational REST endpoints ✅                            |
+
+---
+
+## 🎁 Deliverables Included
+
+This repository contains the expected deliverables:
+
+- Complete and functional source code organized by agent.
+- Detailed `README.md` with architecture, installation, and execution.
+- `requirements.txt` listing all Python dependencies.
+- `.env.example` API key template without sensitive values.
+- Technical documentation integrated in the README.
+- Demo available via the FastAPI and `tests/test_agents.py`.
 
 ---
 
